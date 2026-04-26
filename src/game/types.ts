@@ -1,5 +1,5 @@
 export type Language = 'en' | 'ar';
-export type ScreenState = 'menu' | 'playing' | 'paused' | 'between-levels' | 'gameover' | 'victory';
+export type ScreenState = 'menu' | 'briefing' | 'playing' | 'paused' | 'between-levels' | 'gameover' | 'victory';
 export type Direction = 'up' | 'down' | 'left' | 'right';
 
 export type Wall = { x: number; y: number; width: number; height: number };
@@ -14,6 +14,19 @@ export type Drone = {
   dir?: 1 | -1;
 };
 export type SafeZone = { x: number; y: number; radius: number };
+export type StrikePhase = 'warning' | 'impact' | 'burning';
+export type StrikePattern = 'single' | 'cluster' | 'line';
+export type StrikeZone = {
+  x: number;
+  y: number;
+  radius: number;
+  phase: StrikePhase;
+  timer: number;
+  age: number;
+  pulse: number;
+  hasImpacted?: boolean;
+  pattern?: StrikePattern;
+};
 
 export type LevelDefinition = {
   id: number;
@@ -69,6 +82,10 @@ export type GameState = {
   damageFlash: number;
   screenShake: number;
   hintStrength: number;
+  extractionPulse: number;
+  strikes: StrikeZone[];
+  strikeCooldown: number;
+  ambientPulse: number;
 };
 
 export type InputState = {
@@ -88,4 +105,6 @@ export type UiState = {
   objective: string;
   status: string;
   progress: number;
+  nextStrike: number;
+  dangerLevel: 'low' | 'medium' | 'high';
 };

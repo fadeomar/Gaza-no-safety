@@ -13,7 +13,7 @@ export function getInitialPlayer(levelIndex = 0): Player {
     stamina: 100,
     maxStamina: 100,
     baseSpeed: 190,
-    sprintSpeed: 295,
+    sprintSpeed: 300,
     facing: 'down',
     walkTime: 0,
     isMoving: false,
@@ -42,6 +42,10 @@ export function createLevelState(index: number): GameState {
     safeDiscovered: false,
     damageFlash: 0,
     screenShake: 0,
-    hintStrength: 0
+    hintStrength: 0,
+    extractionPulse: 0,
+    strikes: [],
+    strikeCooldown: 3.4,
+    ambientPulse: 0
   };
 }
