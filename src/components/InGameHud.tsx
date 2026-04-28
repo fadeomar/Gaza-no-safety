@@ -10,21 +10,25 @@ type Props = {
 export default function InGameHud({ language, ui }: Props) {
   const copy = t(language);
   const dangerLabel = ui.dangerLevel === 'high' ? copy.dangerHigh : ui.dangerLevel === 'medium' ? copy.dangerMedium : copy.dangerLow;
+  const health = Math.min(100, Math.max(0, ui.health));
+  const stamina = Math.min(100, Math.max(0, ui.stamina));
+  const breathStatus = stamina <= 0 ? copy.outOfBreath : ui.status === copy.statusSprint ? copy.running : null;
 
   return (
     <>
       <div className="hud-panel hud-top-left">
         <div className="hud-row hud-strong-row">
           <span>{copy.health}</span>
-          <strong>{Math.max(0, ui.health).toFixed(0)}%</strong>
+          <strong>{health.toFixed(0)}%</strong>
         </div>
-        <div className="hud-track danger"><div className="hud-fill" style={{ width: `${Math.max(0, ui.health)}%` }} /></div>
+        <div className="hud-track danger"><div className="hud-fill" style={{ width: `${health}%` }} /></div>
 
         <div className="hud-row mt-12 hud-sub-row">
           <span>{copy.stamina}</span>
-          <strong>{Math.max(0, ui.stamina).toFixed(0)}%</strong>
+          <strong>{stamina.toFixed(0)}%</strong>
         </div>
-        <div className="hud-track"><div className="hud-fill green" style={{ width: `${Math.max(0, ui.stamina)}%` }} /></div>
+        <div className="hud-track"><div className="hud-fill green" style={{ width: `${stamina}%` }} /></div>
+        {breathStatus ? <div className="hud-breath-status">{breathStatus}</div> : null}
       </div>
 
       <div className="hud-panel hud-top-right">

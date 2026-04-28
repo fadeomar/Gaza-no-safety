@@ -54,6 +54,8 @@ export type Camera = {
   y: number;
   width: number;
   height: number;
+  safeTop?: number;
+  safeBottom?: number;
 };
 
 export type Player = {

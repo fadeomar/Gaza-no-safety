@@ -5,7 +5,7 @@ import heroRight from '../assets/hero-right.svg';
 import heroUp from '../assets/hero-up.svg';
 import { VIEWPORT_H, VIEWPORT_W } from '../game/constants';
 import type { GameState, Language, StrikeZone, Wall } from '../game/types';
-import { worldToScreen } from '../game/utils';
+import { clamp, worldToScreen } from '../game/utils';
 
 type Props = {
   frame: number;
@@ -13,17 +13,58 @@ type Props = {
   language: Language;
 };
 
-function syncCanvasSize(canvas: HTMLCanvasElement | null) {
+const MOBILE_VIRTUAL_W = 540;
+
+function getVirtualViewport(rect: DOMRect) {
+  const aspect = rect.width / Math.max(1, rect.height);
+  const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
+  if (aspect < 0.82) {
+    return {
+      width: MOBILE_VIRTUAL_W,
+      height: clamp(MOBILE_VIRTUAL_W / aspect, 860, 1180),
+      safeTop: 88,
+      safeBottom: 310,
+    };
+  }
+  if (isCoarsePointer) {
+    return {
+      width: VIEWPORT_W,
+      height: VIEWPORT_H,
+      safeTop: 100,
+      safeBottom: 260,
+    };
+  }
+  return {
+    width: VIEWPORT_W,
+    height: VIEWPORT_H,
+    safeTop: 0,
+    safeBottom: 0,
+  };
+}
+
+function syncCanvasSize(canvas: HTMLCanvasElement | null, state: GameState) {
   if (!canvas) return;
   const ratio = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
-  canvas.width = rect.width * ratio;
-  canvas.height = rect.height * ratio;
+  const viewport = getVirtualViewport(rect);
+  const maxX = Math.max(0, state.level.worldWidth - viewport.width);
+  const minY = -viewport.safeTop;
+  const maxY = Math.max(minY, state.level.worldHeight - viewport.height + viewport.safeBottom);
+  state.camera.width = viewport.width;
+  state.camera.height = viewport.height;
+  state.camera.safeTop = viewport.safeTop;
+  state.camera.safeBottom = viewport.safeBottom;
+  state.camera.x = clamp(state.camera.x, 0, maxX);
+  state.camera.y = clamp(state.camera.y, minY, maxY);
+  const backingWidth = Math.max(1, Math.round(rect.width * ratio));
+  const backingHeight = Math.max(1, Math.round(rect.height * ratio));
+  if (canvas.width !== backingWidth) canvas.width = backingWidth;
+  if (canvas.height !== backingHeight) canvas.height = backingHeight;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
   ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-  const scaleX = rect.width / VIEWPORT_W;
-  const scaleY = rect.height / VIEWPORT_H;
+  const scaleX = rect.width / viewport.width;
+  const scaleY = rect.height / viewport.height;
   ctx.scale(scaleX, scaleY);
 }
 
@@ -58,13 +99,13 @@ function drawHero(ctx: CanvasRenderingContext2D, x: number, y: number, state: Ga
 
 function drawGround(ctx: CanvasRenderingContext2D, state: GameState) {
   const { level, camera, ambientPulse } = state;
-  const sky = ctx.createLinearGradient(0, 0, 0, VIEWPORT_H);
+  const sky = ctx.createLinearGradient(0, 0, 0, camera.height);
   sky.addColorStop(0, '#09111f');
   sky.addColorStop(1, '#030711');
   ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, VIEWPORT_W, VIEWPORT_H);
+  ctx.fillRect(0, 0, camera.width, camera.height);
 
-  const floor = ctx.createLinearGradient(0, 0, 0, VIEWPORT_H);
+  const floor = ctx.createLinearGradient(0, 0, 0, camera.height);
   floor.addColorStop(0, '#111a27');
   floor.addColorStop(1, '#0a1019');
   ctx.fillStyle = floor;
@@ -95,47 +136,113 @@ function drawGround(ctx: CanvasRenderingContext2D, state: GameState) {
   ctx.strokeRect(-camera.x, -camera.y, level.worldWidth, level.worldHeight);
 }
 
+function rubbleNoise(seed: number, index: number) {
+  const value = Math.sin(seed * 12.9898 + index * 78.233) * 43758.5453;
+  return value - Math.floor(value);
+}
+
 function drawWallRubble(ctx: CanvasRenderingContext2D, camera: GameState['camera'], wall: Wall, seed: number) {
   const screen = worldToScreen(camera, wall.x, wall.y);
+  const chip = Math.min(18, Math.max(7, Math.min(wall.width, wall.height) * 0.24));
+  const points = [
+    { x: screen.x + chip * rubbleNoise(seed, 1), y: screen.y + chip * rubbleNoise(seed, 2) },
+    { x: screen.x + wall.width * 0.34, y: screen.y + chip * rubbleNoise(seed, 3) },
+    { x: screen.x + wall.width * 0.68, y: screen.y + chip * rubbleNoise(seed, 4) },
+    { x: screen.x + wall.width - chip * rubbleNoise(seed, 5), y: screen.y + chip * rubbleNoise(seed, 6) },
+    { x: screen.x + wall.width - chip * rubbleNoise(seed, 7), y: screen.y + wall.height * 0.38 },
+    { x: screen.x + wall.width - chip * rubbleNoise(seed, 8), y: screen.y + wall.height - chip * rubbleNoise(seed, 9) },
+    { x: screen.x + wall.width * 0.62, y: screen.y + wall.height - chip * rubbleNoise(seed, 10) },
+    { x: screen.x + wall.width * 0.26, y: screen.y + wall.height - chip * rubbleNoise(seed, 11) },
+    { x: screen.x + chip * rubbleNoise(seed, 12), y: screen.y + wall.height - chip * rubbleNoise(seed, 13) },
+    { x: screen.x + chip * rubbleNoise(seed, 14), y: screen.y + wall.height * 0.46 },
+  ];
+
+  ctx.save();
+  ctx.beginPath();
+  points.forEach((point, index) => {
+    if (index === 0) ctx.moveTo(point.x, point.y);
+    else ctx.lineTo(point.x, point.y);
+  });
+  ctx.closePath();
   const body = ctx.createLinearGradient(screen.x, screen.y, screen.x + wall.width, screen.y + wall.height);
-  body.addColorStop(0, '#687487');
-  body.addColorStop(1, '#4e596b');
+  body.addColorStop(0, '#69717d');
+  body.addColorStop(0.46, '#555f6d');
+  body.addColorStop(1, '#343d4c');
   ctx.fillStyle = body;
-  ctx.fillRect(screen.x, screen.y, wall.width, wall.height);
+  ctx.fill();
 
-  ctx.fillStyle = 'rgba(255,255,255,0.04)';
-  ctx.fillRect(screen.x + 4, screen.y + 4, wall.width - 8, Math.max(6, wall.height * 0.18));
-  ctx.fillStyle = 'rgba(0,0,0,0.12)';
-  ctx.fillRect(screen.x + 4, screen.y + wall.height - Math.max(8, wall.height * 0.22), wall.width - 8, Math.max(6, wall.height * 0.2));
+  ctx.clip();
+  ctx.fillStyle = 'rgba(255,255,255,0.045)';
+  ctx.fillRect(screen.x + 6, screen.y + 6, wall.width - 12, Math.max(5, wall.height * 0.14));
+  ctx.fillStyle = 'rgba(0,0,0,0.20)';
+  ctx.fillRect(screen.x + 4, screen.y + wall.height - Math.max(9, wall.height * 0.26), wall.width - 8, Math.max(8, wall.height * 0.22));
 
-  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(screen.x, screen.y, wall.width, wall.height);
-
-  for (let i = 0; i < Math.max(3, Math.floor((wall.width + wall.height) / 80)); i += 1) {
-    const rx = screen.x + 8 + ((i * 29 + seed * 11) % Math.max(18, wall.width - 18));
-    const ry = screen.y + 7 + ((i * 17 + seed * 5) % Math.max(18, wall.height - 18));
-    ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.08)';
-    ctx.fillRect(rx, ry, 10, 10);
-  }
-
-  ctx.strokeStyle = 'rgba(30,41,59,0.65)';
-  ctx.lineWidth = 1.2;
-  for (let i = 0; i < 3; i += 1) {
-    const cx = screen.x + 10 + ((seed + i * 33) % Math.max(24, wall.width - 20));
-    const cy = screen.y + 12 + ((seed + i * 21) % Math.max(20, wall.height - 18));
+  ctx.strokeStyle = 'rgba(20,28,39,0.72)';
+  ctx.lineWidth = 2.2;
+  for (let i = 0; i < 5; i += 1) {
+    const startX = screen.x + 10 + rubbleNoise(seed, 20 + i) * Math.max(12, wall.width - 20);
+    const startY = screen.y + 8 + rubbleNoise(seed, 30 + i) * Math.max(12, wall.height - 18);
     ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.lineTo(cx + 8, cy + 5);
-    ctx.lineTo(cx + 3, cy + 13);
+    ctx.moveTo(startX, startY);
+    ctx.lineTo(startX + (rubbleNoise(seed, 40 + i) - 0.5) * 42, startY + 12 + rubbleNoise(seed, 50 + i) * 38);
+    ctx.lineTo(startX + (rubbleNoise(seed, 60 + i) - 0.5) * 64, startY + 28 + rubbleNoise(seed, 70 + i) * 44);
     ctx.stroke();
   }
 
-  for (let i = 0; i < 5; i += 1) {
-    const px = screen.x - 8 + i * 12 + (seed % 5);
-    const py = screen.y + wall.height + 4 + (i % 2) * 5;
-    ctx.fillStyle = i % 2 === 0 ? 'rgba(115, 125, 145, 0.7)' : 'rgba(86, 96, 116, 0.75)';
-    ctx.fillRect(px, py, 7 + (i % 3), 5 + (i % 2));
+  ctx.strokeStyle = 'rgba(28,35,44,0.86)';
+  ctx.lineWidth = 3;
+  for (let i = 0; i < 4; i += 1) {
+    const rx = screen.x + rubbleNoise(seed, 80 + i) * wall.width;
+    const ry = screen.y + rubbleNoise(seed, 90 + i) * wall.height;
+    ctx.beginPath();
+    ctx.moveTo(rx - 18, ry + 8);
+    ctx.lineTo(rx + 18, ry - 8);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(155,166,181,0.42)';
+    ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    ctx.moveTo(rx - 20, ry + 6);
+    ctx.lineTo(rx + 20, ry - 10);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(28,35,44,0.86)';
+    ctx.lineWidth = 3;
+  }
+  ctx.restore();
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.09)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  points.forEach((point, index) => {
+    if (index === 0) ctx.moveTo(point.x, point.y);
+    else ctx.lineTo(point.x, point.y);
+  });
+  ctx.closePath();
+  ctx.stroke();
+
+  const fragments = Math.max(6, Math.floor((wall.width + wall.height) / 56));
+  for (let i = 0; i < fragments; i += 1) {
+    const rx = screen.x - 10 + rubbleNoise(seed, 100 + i) * (wall.width + 20);
+    const ry = screen.y + wall.height - 4 + rubbleNoise(seed, 130 + i) * 18;
+    const size = 4 + rubbleNoise(seed, 160 + i) * 10;
+    ctx.beginPath();
+    ctx.moveTo(rx, ry);
+    ctx.lineTo(rx + size, ry + rubbleNoise(seed, 190 + i) * 5);
+    ctx.lineTo(rx + size * 0.72, ry + size * 0.72);
+    ctx.lineTo(rx - size * 0.25, ry + size * 0.45);
+    ctx.closePath();
+    ctx.fillStyle = i % 3 === 0 ? 'rgba(115,125,145,0.78)' : i % 3 === 1 ? 'rgba(70,80,94,0.86)' : 'rgba(44,52,64,0.88)';
+    ctx.fill();
+  }
+
+  ctx.strokeStyle = 'rgba(34, 42, 52, 0.86)';
+  ctx.lineWidth = 2;
+  for (let i = 0; i < 3; i += 1) {
+    const x = screen.x + rubbleNoise(seed, 220 + i) * wall.width;
+    const y = screen.y + wall.height * (0.15 + rubbleNoise(seed, 230 + i) * 0.7);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + 12 + rubbleNoise(seed, 240 + i) * 18, y + 8 + rubbleNoise(seed, 250 + i) * 16);
+    ctx.stroke();
   }
 }
 
@@ -216,7 +323,7 @@ function renderState(ctx: CanvasRenderingContext2D, state: GameState, _language:
   const shakeY = (Math.random() - 0.5) * screenShake;
 
   ctx.save();
-  ctx.clearRect(0, 0, VIEWPORT_W, VIEWPORT_H);
+  ctx.clearRect(0, 0, camera.width, camera.height);
   ctx.translate(shakeX, shakeY);
 
   drawGround(ctx, state);
@@ -276,21 +383,22 @@ function renderState(ctx: CanvasRenderingContext2D, state: GameState, _language:
   const playerScreen = worldToScreen(camera, player.x, player.y);
   drawHero(ctx, playerScreen.x, playerScreen.y, state, sprites);
 
-  const vignette = ctx.createRadialGradient(VIEWPORT_W / 2, VIEWPORT_H / 2, 140, VIEWPORT_W / 2, VIEWPORT_H / 2, 620);
+  const vignetteRadius = Math.max(camera.width, camera.height) * 0.72;
+  const vignette = ctx.createRadialGradient(camera.width / 2, camera.height / 2, 140, camera.width / 2, camera.height / 2, vignetteRadius);
   vignette.addColorStop(0, `rgba(0,0,0,${level.fogAlpha})`);
   vignette.addColorStop(1, 'rgba(0,0,0,0.58)');
   ctx.fillStyle = vignette;
-  ctx.fillRect(0, 0, VIEWPORT_W, VIEWPORT_H);
+  ctx.fillRect(0, 0, camera.width, camera.height);
 
   if (player.health < 30) {
     const lowHealthAlpha = 0.08 + (1 - player.health / 30) * 0.12 * (0.7 + Math.sin(timeAlive * 6) * 0.3);
     ctx.fillStyle = `rgba(239,68,68,${lowHealthAlpha})`;
-    ctx.fillRect(0, 0, VIEWPORT_W, VIEWPORT_H);
+    ctx.fillRect(0, 0, camera.width, camera.height);
   }
 
   if (damageFlash > 0) {
     ctx.fillStyle = `rgba(255,160,120,${0.16 * damageFlash})`;
-    ctx.fillRect(0, 0, VIEWPORT_W, VIEWPORT_H);
+    ctx.fillRect(0, 0, camera.width, camera.height);
   }
 
   ctx.restore();
@@ -312,15 +420,16 @@ export default function GameCanvas({ frame, state, language }: Props) {
   }, []);
 
   useEffect(() => {
-    syncCanvasSize(canvasRef.current);
-    const onResize = () => syncCanvasSize(canvasRef.current);
+    syncCanvasSize(canvasRef.current, state);
+    const onResize = () => syncCanvasSize(canvasRef.current, state);
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
-  }, []);
+  }, [state]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    syncCanvasSize(canvas, state);
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     renderState(ctx, state, language, sprites);

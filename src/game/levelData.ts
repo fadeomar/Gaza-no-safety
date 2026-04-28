@@ -4,14 +4,14 @@ import type { LevelDefinition } from './types';
 export const LEVELS: LevelDefinition[] = [
   {
     id: 1,
-    name: 'Ruined Streets',
+    name: 'Broken Street',
     worldWidth: WORLD_W,
     worldHeight: WORLD_H,
     drainRate: 2.25,
     damageRate: 22,
     fogAlpha: 0.12,
     discoveryRadius: 190,
-    spawn: { x: 70, y: 70 },
+    spawn: { x: 260, y: 235 },
     safeZone: { x: 1530, y: 940, radius: 34 },
     walls: [
       { x: 110, y: 110, width: 240, height: 44 },
@@ -38,14 +38,14 @@ export const LEVELS: LevelDefinition[] = [
   },
   {
     id: 2,
-    name: 'Collapsed Blocks',
+    name: 'Collapsed Homes',
     worldWidth: WORLD_W,
     worldHeight: WORLD_H,
     drainRate: 3,
     damageRate: 28,
     fogAlpha: 0.16,
     discoveryRadius: 165,
-    spawn: { x: 110, y: 990 },
+    spawn: { x: 160, y: 930 },
     safeZone: { x: 1470, y: 160, radius: 30 },
     walls: [
       { x: 80, y: 100, width: 320, height: 42 },
@@ -75,14 +75,14 @@ export const LEVELS: LevelDefinition[] = [
   },
   {
     id: 3,
-    name: 'Final Escape',
+    name: 'Last Crossing',
     worldWidth: WORLD_W,
     worldHeight: WORLD_H,
     drainRate: 3.8,
     damageRate: 34,
     fogAlpha: 0.2,
     discoveryRadius: 150,
-    spawn: { x: 80, y: 80 },
+    spawn: { x: 240, y: 210 },
     safeZone: { x: 1560, y: 990, radius: 28 },
     walls: [
       { x: 60, y: 120, width: 340, height: 40 },

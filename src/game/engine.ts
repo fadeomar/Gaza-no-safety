@@ -17,6 +17,10 @@ export type TickResult = {
 const WARNING_DURATION = 1.25;
 const IMPACT_DURATION = 0.38;
 const BURN_DURATION = 4.8;
+const SPRINT_STAMINA_DRAIN = 17;
+const MOVING_STAMINA_REGEN = 5;
+const IDLE_STAMINA_REGEN = 10;
+const MIN_STAMINA_TO_SPRINT = 16;
 
 function movePlayer(player: Player, walls: Wall[], worldWidth: number, worldHeight: number, dx: number, dy: number) {
   player.x += dx;
@@ -47,13 +51,18 @@ function getFacing(dx: number, dy: number, current: Direction): Direction {
 
 function updateCamera(state: GameState, dt: number) {
   const { camera, player, level } = state;
+  const safeTop = camera.safeTop ?? 0;
+  const safeBottom = camera.safeBottom ?? 0;
+  const safeHeight = Math.max(120, camera.height - safeTop - safeBottom);
+  const minY = -safeTop;
+  const maxY = Math.max(minY, level.worldHeight - camera.height + safeBottom);
   const targetX = clamp(player.x - camera.width / 2, 0, Math.max(0, level.worldWidth - camera.width));
-  const targetY = clamp(player.y - camera.height / 2, 0, Math.max(0, level.worldHeight - camera.height));
+  const targetY = clamp(player.y - safeTop - safeHeight / 2, minY, maxY);
   const alpha = Math.min(1, dt * CAMERA_LERP);
   camera.x += (targetX - camera.x) * alpha;
   camera.y += (targetY - camera.y) * alpha;
   camera.x = clamp(camera.x, 0, Math.max(0, level.worldWidth - camera.width));
-  camera.y = clamp(camera.y, 0, Math.max(0, level.worldHeight - camera.height));
+  camera.y = clamp(camera.y, minY, maxY);
 }
 
 function strikeIntervalFor(state: GameState) {
@@ -222,6 +231,7 @@ export function createUiState(
     statusScanning: string;
     statusDanger: string;
     statusSprint: string;
+    statusOutOfBreath: string;
     statusLocked: string;
     statusIncoming: string;
     levelNames: readonly string[];
@@ -253,6 +263,7 @@ export function updateGame(
     statusScanning: string;
     statusDanger: string;
     statusSprint: string;
+    statusOutOfBreath: string;
     statusLocked: string;
     statusIncoming: string;
     levelNames: readonly string[];
@@ -284,11 +295,12 @@ export function updateGame(
   player.isMoving = moving;
 
   let isSprinting = false;
-  if (moving && keys.sprint && player.stamina > 8) {
+  if (moving && keys.sprint && player.stamina > MIN_STAMINA_TO_SPRINT) {
     isSprinting = true;
-    player.stamina = Math.max(0, player.stamina - 36 * dt);
+    player.stamina = Math.max(0, player.stamina - SPRINT_STAMINA_DRAIN * dt);
   } else {
-    player.stamina = Math.min(player.maxStamina, player.stamina + (moving ? 18 : 28) * dt);
+    const regenRate = moving ? MOVING_STAMINA_REGEN : IDLE_STAMINA_REGEN;
+    player.stamina = Math.min(player.maxStamina, player.stamina + regenRate * dt);
   }
   player.isSprinting = isSprinting;
 
@@ -357,9 +369,11 @@ export function updateGame(
       ? labels.statusIncoming
       : isSprinting
         ? labels.statusSprint
-        : state.safeDiscovered
-          ? labels.statusLocked
-          : labels.statusScanning;
+        : moving && keys.sprint && player.stamina <= MIN_STAMINA_TO_SPRINT
+          ? labels.statusOutOfBreath
+          : state.safeDiscovered
+            ? labels.statusLocked
+            : labels.statusScanning;
 
   return {
     uiState: createUiState(state, totalLevels, labels, status),

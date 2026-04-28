@@ -77,7 +77,12 @@ export default function Overlay({ language, screen, onStart, onLaunch, onResume,
         {screen === 'briefing' ? <div className="overlay-sub-badge">{copy.alertSubLabel}</div> : null}
         <h2>{title}</h2>
         <p>{body}</p>
-        {screen === 'briefing' ? <div className="overlay-keyhint">Enter / Space</div> : null}
+        {screen === 'briefing' ? (
+          <div className="overlay-keyhint">
+            <span className="desktop-controls-hint">Enter / Space · {copy.controlsHintDesktop}</span>
+            <span className="mobile-controls-hint">{copy.controlsHintMobile}</span>
+          </div>
+        ) : null}
         <div className="overlay-actions">
           <button className="primary" onClick={primaryAction}>{primaryLabel}</button>
           {secondaryLabel && secondaryAction ? <button onClick={secondaryAction}>{secondaryLabel}</button> : null}

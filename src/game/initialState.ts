@@ -13,7 +13,7 @@ export function getInitialPlayer(levelIndex = 0): Player {
     stamina: 100,
     maxStamina: 100,
     baseSpeed: 190,
-    sprintSpeed: 300,
+    sprintSpeed: 360,
     facing: 'down',
     walkTime: 0,
     isMoving: false,
